@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EduNexus – Belajar Jadi Petualangan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="auth" class="auth">
+  <section class="hero">
+    <div class="logo">Edu<span>Nexus</span></div>
+    <h1>Belajar jadi <mark>petualangan</mark> bersama.</h1>
+    <p>Kuis seru, misi harian, lencana, dan kelas kolaboratif. Kumpulkan XP, naikkan level, lalu jadilah juara.</p>
+    <div class="floaters" aria-hidden="true">
+      <div class="fl f1"><b>+60 XP</b><span>kuis selesai</span></div>
+      <div class="fl f2"><b>🔥 6 hari</b><span>streak belajar</span></div>
+      <div class="fl f3"><b>Level 5</b><span>Penjelajah</span></div>
+    </div>
+    <div class="tech">Dibangun dengan Go · Rust · JavaScript</div>
+  </section>
+
+  <section class="authcard">
+    <div class="tabs" role="tablist">
+      <button id="tab-login" class="on" role="tab">Masuk</button>
+      <button id="tab-register" role="tab">Daftar</button>
+    </div>
+    <form id="auth-form" autocomplete="on">
+      <h2 id="auth-title"></h2>
+      <p id="auth-sub" class="sub"></p>
+
+      <fieldset id="role-wrap" class="roles" hidden>
+        <legend>Saya adalah</legend>
+        <label class="chip"><input type="radio" name="role" value="siswa" checked><span>🎒 Siswa</span></label>
+        <label class="chip"><input type="radio" name="role" value="guru"><span>🧑‍🏫 Guru</span></label>
+        <label class="chip"><input type="radio" name="role" value="juri"><span>⚖️ Juri</span></label>
+      </fieldset>
+
+      <label><span id="lbl-user"></span>
+        <input id="username" required minlength="3" maxlength="32" autocomplete="username"></label>
+      <label><span>Kata sandi</span>
+        <input id="password" type="password" required minlength="8" autocomplete="current-password"></label>
+      <label id="confirm-wrap" hidden><span>Ulangi kata sandi</span>
+        <input id="password2" type="password" minlength="8" autocomplete="new-password" placeholder="Ketik ulang kata sandi"></label>
+      <label id="code-wrap" hidden><span>Kode juri</span>
+        <input id="code" placeholder="Dari panitia lomba"></label>
+
+      <p id="auth-msg" class="msg" role="alert"></p>
+      <button class="btn primary wide" id="auth-submit"></button>
+    </form>
+
+    <div class="demo">
+      <p>✨ <b>Untuk juri &amp; pengunjung:</b> coba langsung tanpa daftar</p>
+      <div class="demo-btns">
+        <button class="btn sm" data-demo="rina">🎒 Masuk sebagai Siswa</button>
+        <button class="btn sm" data-demo="bu_sari">🧑‍🏫 Guru</button>
+        <button class="btn sm sun" data-demo="juri1">⚖️ Juri</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="app" hidden>
+  <header class="top">
+    <div class="logo sm">Edu<span>Nexus</span></div>
+    <nav id="nav" aria-label="Menu utama"></nav>
+    <div class="me">
+      <span id="chip" class="chip-me"></span>
+      <button id="logout" class="btn sm" title="Keluar">Keluar</button>
+    </div>
+  </header>
+  <main id="view"></main>
+</div>
+
+<div id="modal" class="modal" hidden></div>
+<div id="toast" class="toast" role="status"></div>
+<script src="app.js"></script>
+</body>
+</html>

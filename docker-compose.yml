@@ -1,0 +1,13 @@
+services:
+  hasher:
+    build: { context: ., dockerfile: hasher/Dockerfile }
+    environment: { ADDR: "0.0.0.0:8081" }
+  gateway:
+    build: { context: ., dockerfile: gateway/Dockerfile }
+    environment:
+      HASHER_URL: http://hasher:8081
+      JWT_SECRET: ${JWT_SECRET:-ganti-dengan-rahasia-panjang}
+      JURY_CODE: ${JURY_CODE:-JURI2026}
+      SEED_DEMO: ${SEED_DEMO:-true}
+    ports: ["8090:8080"]
+    depends_on: [hasher]
