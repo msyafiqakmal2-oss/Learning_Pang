@@ -1,6 +1,6 @@
 # EduNexus — Ekosistem Kolaborasi & Gamifikasi Pendidikan
 
-Belajar jadi petualangan: kuis, misi harian, XP, level, streak, lencana, 
+Belajar jadi petualangan: kuis, misi harian, XP, level, streak, lencana, kelas kolaboratif,
 dan modul **penilaian juri** untuk memilih karya terbaik.
 
 ```
