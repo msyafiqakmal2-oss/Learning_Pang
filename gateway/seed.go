@@ -62,6 +62,7 @@ func (a *App) seed() {
 		Question{"Hasil dari 1/2 + 1/4 adalah...", []string{"1/6", "3/4", "2/6", "1/8"}, 1},
 		Question{"Pecahan yang senilai dengan 2/3 adalah...", []string{"4/6", "3/4", "2/6", "4/9"}, 0},
 		Question{"Manakah pecahan terbesar?", []string{"1/3", "2/5", "3/4", "1/2"}, 2})
+	q1.Takers, q1.ScoreSum, q1.Correct = 3, 8, []int{3, 3, 2} // statistik awal untuk demo
 	mkQuiz(mtk, "Bangun Datar", 50,
 		Question{"Luas persegi dengan sisi 6 cm adalah...", []string{"12 cm²", "24 cm²", "36 cm²", "18 cm²"}, 2},
 		Question{"Banyak sisi pada segitiga adalah...", []string{"2", "3", "4", "5"}, 1},
@@ -97,5 +98,6 @@ func (a *App) seed() {
 	mkProj(dimas, "Peta Konsep AR", "Kartu pelajaran yang menampilkan peta konsep 3D lewat kamera ponsel.", "Tim Realita", 8, 7, 8, 9, 9)
 	mkProj(rina, "Smart Study Planner", "Perencana belajar yang menyusun jadwal berdasarkan hasil kuis dan streak.", "Tim Fokus", 7, 8, 9, 7, 8)
 	mkProj(bayu, "Kamus Bahasa Daerah", "Kamus kolaboratif tempat siswa menambah kosakata bahasa daerah dengan audio.", "Tim Nusantara")
+	a.markDirty()
 	log.Printf("data demo siap (akun: bu_sari, rina, dimas, putri, bayu, citra, juri1, juri2 | sandi: %s)", demoPass)
 }

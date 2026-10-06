@@ -30,10 +30,10 @@ Data demo terisi otomatis (matikan dengan `SEED_DEMO=false`).
 Kode kelas demo: `MTK7A`, `ENG8B`. Kode mendaftar sebagai juri: `JURI2026` (ubah lewat `JURY_CODE`).
 
 ## Fitur utama
-- **Gamifikasi:** XP, level (tiap 100 XP), streak harian, 3 misi harian, 6 lencana, papan peringkat.
+- **Gamifikasi:** XP, gelar level (Pemula → Legenda), streak, 3 misi harian, 8 lencana, bonus kecepatan ⚡, papan peringkat.
 - **Kolaborasi:** gabung kelas dengan kode, diskusi + apresiasi (like), Tantangan Kelas (total XP kelas).
-- **Kuis:** guru membuat kuis sendiri; siswa dapat pembahasan; XP hanya pada percobaan pertama.
-- **Karya & Juri:** siswa mengirim karya; juri menilai 5 kriteria berbobot; podium juara otomatis.
+- **Kuis:** guru membuat kuis sendiri; siswa dapat timer + pembahasan; XP hanya pada percobaan pertama; guru melihat statistik (rata-rata, soal tersulit, hasil siswa).
+- **Karya & Juri:** siswa mengirim karya; juri menilai 5 kriteria berbobot; podium juara otomatis, sertifikat juara yang bisa dicetak, rekap nilai CSV.
 - **Keamanan:** JWT, RBAC per peran, Argon2id (Rust), validasi server, UI anti-XSS, log audit.
 
 ## Penilaian juri
@@ -41,5 +41,5 @@ Skor akhir 0-100 = rata-rata nilai semua juri, dengan bobot:
 Inovasi 25% · Dampak Pendidikan 25% · Kolaborasi 20% · Desain & UX 15% · Kualitas Teknis 15%.
 
 ## Catatan
-- Data masih in-memory (hilang saat restart). Lihat `docs/UPGRADE.md` untuk database permanen.
+- Data disimpan permanen di `edunexus.json` (Docker: volume `edudata`). Hapus berkas/volume untuk mengulang dari awal. Set `DATA_FILE=off` untuk mematikan.
 - Ganti `JWT_SECRET` dan `JURY_CODE` sebelum dipakai sungguhan.

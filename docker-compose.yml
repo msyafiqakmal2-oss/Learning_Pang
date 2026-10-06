@@ -9,5 +9,10 @@ services:
       JWT_SECRET: ${JWT_SECRET:-ganti-dengan-rahasia-panjang}
       JURY_CODE: ${JURY_CODE:-JURI2026}
       SEED_DEMO: ${SEED_DEMO:-true}
-    ports: ["8090:8080"]
+      DATA_FILE: /data/edunexus.json
+    volumes: [edudata:/data]
+    ports: ["8080:8080"]
     depends_on: [hasher]
+
+volumes:
+  edudata:

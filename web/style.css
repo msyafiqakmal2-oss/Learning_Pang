@@ -134,3 +134,17 @@ code{background:#EEE9FF;padding:1px 7px;border-radius:6px;font-weight:700}
 
 @media(max-width:820px){.auth{grid-template-columns:1fr}.hero{padding:28px 22px}.top{flex-wrap:wrap}nav{order:3;flex-basis:100%}.proj{grid-template-columns:auto 1fr}.proj .score{grid-column:1/-1;text-align:left}.crit{grid-template-columns:100px 1fr 28px}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* fitur baru */
+.timer{font:700 1rem Fredoka;background:#FFF0B8;border:2.5px solid var(--ink);border-radius:99px;padding:2px 12px}
+.bar.coral i{background:var(--coral)}
+.cert{text-align:center}
+.cert-in{border:6px double var(--violet);border-radius:14px;padding:28px 18px;background:#FFFDF5}
+.cert-in h2{font-size:1.5rem;margin:8px 0}.cert-in h1{font-size:2.2rem;margin:6px 0;color:var(--violet)}
+.cert-medal{font:700 1.6rem Fredoka;margin:14px 0;background:var(--sun);display:inline-block;padding:6px 18px;border:2.5px solid var(--ink);border-radius:99px}
+@media print{
+  body>*:not(#modal){display:none!important}
+  #modal{position:static;background:none;padding:0;display:block;overflow:visible}
+  .sheet{box-shadow:none;border:0;max-height:none;overflow:visible;width:100%}
+  .sheet .x,.noprint{display:none!important}
+}

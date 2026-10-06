@@ -1,2 +1,4 @@
 hasher/target/
 .env
+edunexus.json
+*.json.tmp

@@ -14,11 +14,23 @@ func getenv(k, d string) string {
 	return d
 }
 
-func logging(next http.Handler) http.Handler {
+type statusWriter struct {
+	http.ResponseWriter
+	code int
+}
+
+func (w *statusWriter) WriteHeader(c int) { w.code = c; w.ResponseWriter.WriteHeader(c) }
+
+// wrap: log request + tandai data "berubah" setelah aksi tulis yang sukses.
+func (a *App) wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t := time.Now()
-		next.ServeHTTP(w, r)
-		log.Printf("%s %s %s", r.Method, r.URL.Path, time.Since(t).Round(time.Microsecond))
+		sw := &statusWriter{w, 200}
+		next.ServeHTTP(sw, r)
+		log.Printf("%s %s %d %s", r.Method, r.URL.Path, sw.code, time.Since(t).Round(time.Microsecond))
+		if r.Method != http.MethodGet && sw.code < 400 {
+			a.markDirty()
+		}
 	})
 }
 
@@ -28,6 +40,22 @@ func main() {
 		hasher:   NewHasher(os.Getenv("HASHER_URL")),
 		secret:   []byte(getenv("JWT_SECRET", "dev-secret-ganti-di-produksi")),
 		juryCode: getenv("JURY_CODE", "JURI2026"),
+	}
+	if dataFile := getenv("DATA_FILE", "edunexus.json"); dataFile != "off" {
+		if err := a.store.Load(dataFile); err != nil {
+			log.Printf("gagal memuat data: %v", err)
+		} else if n := len(a.store.users); n > 0 {
+			log.Printf("data dimuat dari %s (%d akun)", dataFile, n)
+		}
+		a.dirty = make(chan struct{}, 1)
+		go func() {
+			for range a.dirty {
+				time.Sleep(400 * time.Millisecond)
+				if err := a.store.Save(dataFile); err != nil {
+					log.Printf("gagal menyimpan data: %v", err)
+				}
+			}
+		}()
 	}
 	if getenv("SEED_DEMO", "true") == "true" {
 		go a.seed()
@@ -49,7 +77,9 @@ func main() {
 	mux.HandleFunc("GET /api/classes/{id}/quizzes", a.auth(a.listQuizzes))
 	mux.HandleFunc("POST /api/classes/{id}/quizzes", a.auth(guru(a.createQuiz)))
 	mux.HandleFunc("DELETE /api/quizzes/{id}", a.auth(guru(a.deleteQuiz)))
+	mux.HandleFunc("POST /api/quizzes/{id}/start", a.auth(siswa(a.startQuiz)))
 	mux.HandleFunc("POST /api/quizzes/{id}/attempt", a.auth(siswa(a.attempt)))
+	mux.HandleFunc("GET /api/quizzes/{id}/stats", a.auth(guru(a.quizStats)))
 
 	mux.HandleFunc("GET /api/classes/{id}/posts", a.auth(a.listPosts))
 	mux.HandleFunc("POST /api/classes/{id}/posts", a.auth(a.createPost))
@@ -57,6 +87,7 @@ func main() {
 	mux.HandleFunc("DELETE /api/posts/{id}", a.auth(a.deletePost))
 
 	mux.HandleFunc("GET /api/projects", a.auth(a.listProjects))
+	mux.HandleFunc("GET /api/projects/export", a.auth(guruJuri(a.exportProjects)))
 	mux.HandleFunc("POST /api/projects", a.auth(siswa(a.createProject)))
 	mux.HandleFunc("DELETE /api/projects/{id}", a.auth(a.only("siswa", "guru")(a.deleteProject)))
 	mux.HandleFunc("POST /api/projects/{id}/score", a.auth(juri(a.scoreProject)))
@@ -67,11 +98,11 @@ func main() {
 	})
 	static := http.FileServer(http.Dir(getenv("WEB_DIR", "../web")))
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Cache-Control", "no-cache") // selalu cek versi terbaru
 		static.ServeHTTP(w, r)
 	}))
 
 	addr := ":" + getenv("PORT", "8080")
 	log.Printf("EduNexus gateway (Go) berjalan di %s", addr)
-	log.Fatal(http.ListenAndServe(addr, logging(mux)))
+	log.Fatal(http.ListenAndServe(addr, a.wrap(mux)))
 }

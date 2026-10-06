@@ -54,9 +54,9 @@ function reward(res) {
   if (parts.length) toast(parts.join("  •  "));
 }
 
-function modal(node) {
+function modal(node, onClose) {
   const m = $("modal");
-  const close = () => { m.hidden = true; m.replaceChildren(); };
+  const close = () => { m.hidden = true; m.replaceChildren(); if (onClose) onClose(); };
   m.replaceChildren(h("div", { class: "sheet", role: "dialog", "aria-modal": "true" }, h("button", { class: "x", "aria-label": "Tutup", onclick: close }, "✕"), node));
   m.hidden = false;
   m.onclick = (e) => { if (e.target === m) close(); };
@@ -146,7 +146,7 @@ $("logout").onclick = logout;
 // ---------- kerangka ----------
 function header() {
   const m = S.me;
-  $("chip").textContent = m.role === "siswa" ? `${m.username} · Lv ${m.level} · ${m.xp} XP` : `${m.username} · ${m.role}`;
+  $("chip").textContent = m.role === "siswa" ? `${m.username} · Lv ${m.level} ${m.title} · ${m.xp} XP` : `${m.username} · ${m.role}`;
 }
 function nav() {
   $("nav").replaceChildren(...NAV[S.me.role].map(([id, label]) =>
@@ -181,7 +181,7 @@ async function home() {
       h("div", { style: "flex:1;min-width:220px" },
         h("div", { class: "row" }, h("h2", { style: "margin:0" }, `Halo, ${m.username}!`), h("span", { class: "tag" }, m.role)),
         m.role === "siswa" ? [
-          h("div", { class: "row sb", style: "margin:10px 0 6px" }, h("span", { class: "big" }, `Level ${m.level}`), h("span", { class: "muted" }, `${m.level_xp}/100 XP menuju Level ${m.level + 1}`)),
+          h("div", { class: "row sb", style: "margin:10px 0 6px" }, h("span", { class: "big" }, `Level ${m.level} · ${m.title}`), h("span", { class: "muted" }, `${m.level_xp}/100 XP menuju Level ${m.level + 1}`)),
           h("div", { class: "xpbar" }, h("i", { style: `width:${m.level_xp}%` })),
         ] : h("p", { class: "muted" }, "Buat kelas, susun kuis, dan pantau semangat belajar siswa."),
       ),
@@ -264,6 +264,7 @@ async function quizPanel(c, m) {
       q.done && h("span", { class: "tag mint", style: "margin-left:8px" }, `Terbaik ${q.best}/${q.total}`))),
     h("div", { class: "row" },
       m.role === "siswa" && h("button", { class: "btn " + (q.done ? "" : "mint"), onclick: () => playQuiz(q) }, q.done ? "Ulangi" : "Mulai ▶"),
+      m.role === "guru" && h("button", { class: "btn sm", onclick: run(() => quizStats(q)) }, "📊 Statistik"),
       m.role === "guru" && h("button", { class: "btn danger sm", onclick: run(async () => {
         if (!confirmDel(`Hapus kuis "${q.title}"?`)) return;
         await api("/quizzes/" + q.id, { method: "DELETE" }); toast("Kuis dihapus"); render();
@@ -272,9 +273,17 @@ async function quizPanel(c, m) {
 }
 
 function playQuiz(q) {
-  let i = 0; const ans = [];
+  let i = 0; const ans = []; let t0 = Date.now(), tick;
   const box = h("div");
-  const close = modal(box);
+  const timer = h("span", { class: "timer" }, "⏱ 0:00");
+  const stop = () => clearInterval(tick);
+  const close = modal(box, stop);
+  api(`/quizzes/${q.id}/start`, { method: "POST" }).then(() => { t0 = Date.now(); }).catch(() => {});
+  tick = setInterval(() => {
+    if (!box.isConnected) return stop();
+    const sec = Math.floor((Date.now() - t0) / 1000);
+    timer.textContent = `⏱ ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+  }, 500);
   const step = () => {
     const qu = q.questions[i];
     const next = h("button", { class: "btn primary", disabled: true, onclick: run(async () => {
@@ -283,7 +292,8 @@ function playQuiz(q) {
       reward(res); showResult(res);
     }) }, i < q.questions.length - 1 ? "Lanjut →" : "Selesai ✓");
     put(box, 
-      h("span", { class: "tag" }, q.title), h("h3", { style: "margin-top:10px" }, `Soal ${i + 1} dari ${q.questions.length}`),
+      h("div", { class: "row sb" }, h("span", { class: "tag" }, q.title), timer), h("h3", { style: "margin-top:10px" }, `Soal ${i + 1} dari ${q.questions.length}`),
+      h("small", { class: "muted" }, "⚡ Bonus kecepatan hingga +10 XP jika semua benar (percobaan pertama)"),
       h("div", { class: "progress" }, h("i", { style: `width:${(i / q.questions.length) * 100}%` })),
       h("p", { style: "font-size:1.1rem;font-weight:700" }, qu.text),
       qu.options.map((o, k) => h("button", { class: "opt" + (ans[i] === k ? " sel" : ""), onclick: (e) => {
@@ -294,11 +304,12 @@ function playQuiz(q) {
     if (ans[i] != null) { box.querySelectorAll(".opt")[ans[i]].classList.add("sel"); next.disabled = false; }
   };
   const showResult = (res) => {
+    stop();
     if (res.score === res.total) confetti();
     put(box, h("div", { class: "result" },
       h("div", { class: "big" }, `${res.score}/${res.total}`),
       h("h3", {}, res.score === res.total ? "Sempurna! 🎉" : res.score >= res.total / 2 ? "Bagus sekali! 👏" : "Ayo coba lagi! 💪"),
-      h("p", { class: "muted" }, res.first ? `Kamu mendapat +${res.xp} XP${res.bonus ? ` dan bonus misi +${res.bonus} XP` : ""}` : "XP hanya diberikan pada percobaan pertama."),
+      h("p", { class: "muted" }, res.first ? `Kamu mendapat +${res.xp} XP${res.bonus ? ` dan bonus misi +${res.bonus} XP` : ""}${res.speed ? ` · ⚡ bonus kecepatan +${res.speed} (${res.seconds} detik)` : ""}` : "XP hanya diberikan pada percobaan pertama."),
       res.badges.length ? h("p", {}, res.badges.map((b) => h("span", { class: "tag sun", style: "margin:2px" }, b))) : null),
       h("h3", { style: "margin:14px 0 6px" }, "Pembahasan"),
       q.questions.map((qu, k) => h("div", { style: "margin-bottom:12px" }, h("b", {}, `${k + 1}. ${qu.text}`),
@@ -307,6 +318,25 @@ function playQuiz(q) {
       h("div", { class: "row", style: "justify-content:flex-end" }, h("button", { class: "btn primary", onclick: () => { close(); render(); } }, "Tutup")));
   };
   step();
+}
+
+async function quizStats(q) {
+  const d = await api(`/quizzes/${q.id}/stats`);
+  const hardest = d.takers ? d.questions.reduce((a, b) => (b.correct_pct < a.correct_pct ? b : a)) : null;
+  modal(h("div", {},
+    h("h2", {}, `📊 ${d.title}`),
+    h("div", { class: "stats" },
+      h("div", { class: "stat" }, h("div", { class: "num" }, `${d.takers}/${d.members}`), h("span", {}, "siswa sudah mengerjakan")),
+      h("div", { class: "stat" }, h("div", { class: "num" }, `${d.avg_pct}%`), h("span", {}, "rata-rata nilai"))),
+    d.takers ? [
+      h("h3", { style: "margin:16px 0 6px" }, "Tingkat jawaban benar per soal"),
+      d.questions.map((x, i) => h("div", { style: "margin:10px 0" },
+        h("div", { class: "row sb" }, h("span", {}, `${i + 1}. ${x.text}`), h("b", {}, `${x.correct_pct}%`)),
+        bar(x.correct_pct, x.correct_pct < 60 ? "coral" : "mint"))),
+      hardest && hardest.correct_pct < 100 ? h("p", { class: "quote" }, `💡 Soal tersulit: "${hardest.text}" (${hardest.correct_pct}% benar). Pertimbangkan membahasnya di kelas.`) : null,
+      h("h3", { style: "margin:16px 0 4px" }, "Hasil siswa"),
+      d.results.map((r) => h("div", { class: "quiz", style: "padding:8px 0" }, h("b", {}, r.username), h("span", { class: "tag" + (r.score === r.total ? " mint" : "") }, `${r.score}/${r.total}`))),
+    ] : h("div", { class: "empty", style: "margin-top:14px" }, "Belum ada siswa yang mengerjakan kuis ini.")));
 }
 
 function quizBuilder(c) {
@@ -381,7 +411,7 @@ async function peringkat() {
     const top = lb.students[0]?.xp || 1;
     lb.students.forEach((s) => list.append(h("div", { class: "rankrow" + (s.id === m.id ? " me" : "") },
       h("div", { class: "pos" }, medal(s.rank)),
-      h("div", {}, h("b", {}, s.username, s.id === m.id ? " (kamu)" : ""), h("div", { class: "muted", style: "font-size:.8rem" }, `Level ${s.level} · 🔥 ${s.streak} hari · 🏅 ${s.badges}`), bar((s.xp / top) * 100)),
+      h("div", {}, h("b", {}, s.username, s.id === m.id ? " (kamu)" : ""), h("div", { class: "muted", style: "font-size:.8rem" }, `Level ${s.level} ${s.title} · 🔥 ${s.streak} hari · 🏅 ${s.badges}`), bar((s.xp / top) * 100)),
       h("div", { class: "num" }, `${s.xp} XP`))));
   } else {
     const top = lb.classes[0]?.xp || 1;
@@ -407,7 +437,8 @@ async function karya() {
         h("div", { class: "crown" }, p.rank === 1 ? "👑" : p.rank === 2 ? "🥈" : "🥉"),
         p.rank === 1 && h("span", { class: "tag" }, "Calon Juara 1"),
         h("h3", {}, p.title), h("div", { class: "muted", style: "font-size:.8rem" }, p.team),
-        h("div", { class: "num" }, p.score), h("small", {}, `dari ${p.votes} juri`))))));
+        h("div", { class: "num" }, p.score), h("small", {}, `dari ${p.votes} juri`),
+        h("div", {}, h("button", { class: "btn sm", style: "margin-top:8px", onclick: () => certificate(p) }, "🎓 Sertifikat")))))));
   }
   if (m.role === "siswa") {
     const t = h("input", { placeholder: "Judul karya / proyek", maxlength: 80 });
@@ -426,9 +457,32 @@ async function karya() {
       h("p", { class: "muted", style: "margin-top:0" }, "Nilai tiap kriteria 1-10. Skor akhir (0-100) dihitung dengan bobot berikut:"),
       h("div", { class: "row" }, crit.map((c) => h("span", { class: "tag sun" }, `${c.name} ${c.weight}%`)))));
   }
+  if (m.role === "juri" || m.role === "guru") wrap.append(h("div", { class: "row" }, h("button", { class: "btn sm", onclick: run(downloadCsv) }, "⬇️ Unduh rekap nilai (CSV)")));
   if (!ps.length) wrap.append(empty("Belum ada karya."));
   ps.forEach((p) => wrap.append(projectCard(p, crit, m)));
   return wrap;
+}
+
+async function downloadCsv() {
+  const res = await fetch("/api/projects/export", { headers: { Authorization: "Bearer " + localStorage.getItem("token") } });
+  if (!res.ok) throw new Error("Gagal mengunduh rekap.");
+  const url = URL.createObjectURL(await res.blob());
+  const a = h("a", { href: url, download: "rekap-juri.csv" });
+  document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
+function certificate(p) {
+  const medal = p.rank === 1 ? "🥇 Juara 1" : p.rank === 2 ? "🥈 Juara 2" : "🥉 Juara 3";
+  modal(h("div", { class: "cert" },
+    h("div", { class: "cert-in" },
+      h("div", { class: "logo" }, "Edu", h("span", {}, "Nexus")),
+      h("h2", {}, "Sertifikat Penghargaan"),
+      h("p", {}, "diberikan kepada"),
+      h("h1", {}, p.team),
+      h("p", {}, "atas karya"), h("h3", {}, `“${p.title}”`),
+      h("div", { class: "cert-medal" }, medal),
+      h("p", { class: "muted" }, `Skor akhir ${p.score}/100 dari ${p.votes} juri · ${new Date().toLocaleDateString("id-ID", { dateStyle: "long" })}`)),
+    h("div", { class: "row noprint", style: "justify-content:center;margin-top:14px" }, h("button", { class: "btn primary", onclick: () => window.print() }, "🖨️ Cetak / Simpan PDF"))));
 }
 
 function projectCard(p, crit, m) {
@@ -483,11 +537,11 @@ async function panduan() {
       [["Guru", "bu_sari"], ["Siswa", "rina"], ["Siswa", "putri"], ["Siswa", "dimas"], ["Juri", "juri1"], ["Juri", "juri2"]].map(([r, u]) => h("tr", {}, h("td", {}, r), h("td", {}, h("code", {}, u)), h("td", {}, h("code", {}, "demo12345"))))),
     h("p", { class: "muted", style: "margin-bottom:0" }, "Mendaftar sebagai juri baru? Gunakan kode ", h("code", {}, "JURI2026"), ".")));
   const map = [
-    ["Inovasi (25%)", "Gamifikasi lengkap: XP, level, streak, misi harian, lencana; Tantangan Kelas; arsitektur multi-bahasa Go + Rust."],
-    ["Dampak Pendidikan (25%)", "Kuis dengan pembahasan, XP hanya di percobaan pertama (anti-curang), guru dapat membuat kuis sendiri."],
+    ["Inovasi (25%)", "Gamifikasi lengkap: XP, gelar level, streak, misi harian, 8 lencana, bonus kecepatan; Tantangan Kelas; sertifikat juara; arsitektur Go + Rust."],
+    ["Dampak Pendidikan (25%)", "Kuis dengan pembahasan, XP hanya di percobaan pertama (anti-curang), statistik kuis untuk guru (soal tersulit), guru membuat kuis sendiri."],
     ["Kolaborasi (20%)", "Diskusi kelas dengan apresiasi, XP gabungan kelas, karya tim yang dinilai juri."],
     ["Desain & UX (15%)", "Antarmuka ramah, responsif, mendukung keyboard, kontras tinggi, animasi dapat dimatikan (reduced motion)."],
-    ["Kualitas Teknis (15%)", "Go (API, JWT, RBAC 3 peran), Rust (Argon2id + audit log), Docker Compose, validasi server, XSS-safe."],
+    ["Kualitas Teknis (15%)", "Go (API, JWT, RBAC 3 peran), Rust (Argon2id + audit log), data permanen, ekspor CSV aman, Docker Compose, validasi server, XSS-safe."],
   ];
   wrap.append(h("div", { class: "card" }, h("h2", {}, "🗺️ Peta fitur → kriteria juri"), h("div", { class: "grid" }, map.map(([t, d]) => h("div", { class: "stat", style: "text-align:left" }, h("b", {}, t), h("p", { class: "muted", style: "margin:6px 0 0;font-size:.88rem" }, d))))));
   if (m.role === "guru" || m.role === "juri") {

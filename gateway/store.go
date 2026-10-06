@@ -40,7 +40,7 @@ type User struct {
 	Streak   int
 	LastDay  string
 	Badges   []string
-	day      dayStats
+	Day      dayStats
 }
 
 type Class struct {
@@ -61,6 +61,8 @@ type Quiz struct {
 	ID, ClassID, XPReward int
 	Title                 string
 	Questions             []Question
+	Takers, ScoreSum      int
+	Correct               []int
 }
 
 type Attempt struct{ Score, Total int }
@@ -94,11 +96,12 @@ type Store struct {
 	attempts map[[2]int]*Attempt
 	posts    map[int]*Post
 	projects map[int]*Project
+	started  map[[2]int]time.Time
 }
 
 func NewStore() *Store {
 	return &Store{users: map[int]*User{}, classes: map[int]*Class{}, quizzes: map[int]*Quiz{},
-		attempts: map[[2]int]*Attempt{}, posts: map[int]*Post{}, projects: map[int]*Project{}}
+		attempts: map[[2]int]*Attempt{}, posts: map[int]*Post{}, projects: map[int]*Project{}, started: map[[2]int]time.Time{}}
 }
 
 func (s *Store) id() int { s.seq++; return s.seq }
@@ -120,6 +123,16 @@ var badgeCatalog = []map[string]string{
 	{"id": "streak3", "name": "Api Semangat", "desc": "Belajar 3 hari berturut-turut", "icon": "🔥"},
 	{"id": "disukai", "name": "Bintang Kelas", "desc": "Satu postingan mendapat 5 like", "icon": "⭐"},
 	{"id": "pencipta", "name": "Pencipta Karya", "desc": "Mengirim karya proyek", "icon": "🎨"},
+	{"id": "kilat", "name": "Kilat", "desc": "Nilai sempurna dengan jawaban super cepat", "icon": "⚡"},
+	{"id": "streak7", "name": "Konsisten", "desc": "Belajar 7 hari berturut-turut", "icon": "🌟"},
+}
+
+func levelTitle(l int) string {
+	t := []string{"Pemula", "Penjelajah", "Petualang", "Pendekar", "Ahli", "Master"}
+	if l >= 1 && l <= len(t) {
+		return t[l-1]
+	}
+	return "Legenda"
 }
 
 func today() string { return time.Now().Format("2006-01-02") }
@@ -134,8 +147,8 @@ func (u *User) give(id string) {
 }
 
 func (u *User) rollDay() {
-	if u.day.Date != today() {
-		u.day = dayStats{Date: today(), Count: map[string]int{}, Done: map[string]bool{}}
+	if u.Day.Date != today() || u.Day.Count == nil {
+		u.Day = dayStats{Date: today(), Count: map[string]int{}, Done: map[string]bool{}}
 	}
 }
 
@@ -154,15 +167,18 @@ func (u *User) touch() {
 	if u.Streak >= 3 {
 		u.give("streak3")
 	}
+	if u.Streak >= 7 {
+		u.give("streak7")
+	}
 }
 
 // event mencatat progres misi harian dan mengembalikan bonus XP bila misi selesai.
 func (u *User) event(kind string) int {
 	u.rollDay()
-	u.day.Count[kind]++
+	u.Day.Count[kind]++
 	for _, q := range quests {
-		if q.ID == kind && u.day.Count[kind] >= q.Goal && !u.day.Done[kind] {
-			u.day.Done[kind] = true
+		if q.ID == kind && u.Day.Count[kind] >= q.Goal && !u.Day.Done[kind] {
+			u.Day.Done[kind] = true
 			u.XP += q.XP
 			return q.XP
 		}
@@ -186,14 +202,14 @@ func (s *Store) profile(u *User) map[string]any {
 	u.rollDay()
 	qs := []map[string]any{}
 	for _, q := range quests {
-		p := u.day.Count[q.ID]
+		p := u.Day.Count[q.ID]
 		if p > q.Goal {
 			p = q.Goal
 		}
-		qs = append(qs, map[string]any{"id": q.ID, "title": q.Title, "goal": q.Goal, "progress": p, "xp": q.XP, "done": u.day.Done[q.ID]})
+		qs = append(qs, map[string]any{"id": q.ID, "title": q.Title, "goal": q.Goal, "progress": p, "xp": q.XP, "done": u.Day.Done[q.ID]})
 	}
 	return map[string]any{"id": u.ID, "username": u.Username, "role": u.Role, "xp": u.XP,
-		"level": u.XP/100 + 1, "level_xp": u.XP % 100, "streak": u.Streak,
+		"level": u.XP/100 + 1, "title": levelTitle(u.XP/100 + 1), "level_xp": u.XP % 100, "streak": u.Streak,
 		"badges": u.Badges, "catalog": badgeCatalog, "quests": qs}
 }
 
@@ -375,7 +391,7 @@ func (s *Store) CreateQuiz(uid, classID int, title string, reward int, qs []Ques
 	if reward < 10 || reward > 200 {
 		reward = 50
 	}
-	q := &Quiz{ID: s.id(), ClassID: classID, Title: title, XPReward: reward, Questions: qs}
+	q := &Quiz{ID: s.id(), ClassID: classID, Title: title, XPReward: reward, Questions: qs, Correct: make([]int, len(qs))}
 	s.quizzes[q.ID] = q
 	return q, nil
 }
@@ -428,10 +444,9 @@ func (s *Store) DeleteQuiz(uid, id int) (string, error) {
 	return q.Title, nil
 }
 
-func (s *Store) SubmitAttempt(uid, qid int, ans []int) (map[string]any, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	u, q := s.users[uid], s.quizzes[qid]
+// canPlay memeriksa siswa anggota kelas pemilik kuis.
+func (s *Store) canPlay(uid int, q *Quiz) (*User, error) {
+	u := s.users[uid]
 	if u == nil || q == nil {
 		return nil, ErrNotFound
 	}
@@ -439,38 +454,126 @@ func (s *Store) SubmitAttempt(uid, qid int, ans []int) (map[string]any, error) {
 	if u.Role != "siswa" || c == nil || !c.Members[uid] {
 		return nil, ErrForbidden
 	}
-	if len(ans) != len(q.Questions) {
+	return u, nil
+}
+
+// StartQuiz mencatat waktu mulai di server (dasar bonus kecepatan).
+func (s *Store) StartQuiz(uid, qid int) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	q := s.quizzes[qid]
+	if _, err := s.canPlay(uid, q); err != nil {
+		return 0, err
+	}
+	s.started[[2]int{uid, qid}] = time.Now()
+	return 20 * len(q.Questions), nil
+}
+
+func (s *Store) SubmitAttempt(uid, qid int, ans []int) (map[string]any, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	q := s.quizzes[qid]
+	u, err := s.canPlay(uid, q)
+	if err != nil {
+		return nil, err
+	}
+	total := len(q.Questions)
+	if len(ans) != total {
 		return nil, bad("Jawab semua soal terlebih dahulu.")
 	}
 	score := 0
-	correct := make([]int, len(q.Questions))
+	correct := make([]int, total)
 	for i, qu := range q.Questions {
 		correct[i] = qu.Answer
 		if ans[i] == qu.Answer {
 			score++
 		}
 	}
-	before := len(u.Badges)
-	xp := 0
 	key := [2]int{uid, qid}
-	first := s.attempts[key] == nil
-	if prev := s.attempts[key]; prev == nil {
-		xp = int(math.Round(float64(q.XPReward) * float64(score) / float64(len(q.Questions))))
-		if score == len(q.Questions) {
+	secs := 0
+	if t0, ok := s.started[key]; ok {
+		secs = int(time.Since(t0).Seconds())
+		delete(s.started, key)
+	}
+	before := len(u.Badges)
+	xp, speed := 0, 0
+	prev := s.attempts[key]
+	first := prev == nil
+	if first {
+		xp = int(math.Round(float64(q.XPReward) * float64(score) / float64(total)))
+		if score == total {
 			xp += 10
 			u.give("sempurna")
+			if limit := 20 * total; secs > 0 && secs < limit { // bonus kecepatan maks. +10 XP
+				speed = int(math.Round(10 * (1 - float64(secs)/float64(limit))))
+			}
+			if speed >= 6 {
+				u.give("kilat")
+			}
+			xp += speed
 		}
 		u.give("pemula")
 		u.XP += xp
-		s.attempts[key] = &Attempt{score, len(q.Questions)}
+		s.attempts[key] = &Attempt{score, total}
+		if len(q.Correct) != total {
+			q.Correct = make([]int, total)
+		}
+		q.Takers++
+		q.ScoreSum += score
+		for i := range correct {
+			if ans[i] == correct[i] {
+				q.Correct[i]++
+			}
+		}
 	} else if score > prev.Score {
 		prev.Score = score
 	}
 	u.touch()
 	bonus := u.event("quiz")
-	return map[string]any{"score": score, "total": len(q.Questions), "xp": xp, "bonus": bonus,
-		"correct": correct, "first": first,
-		"badges": newBadges(u, before), "profile": s.profile(u)}, nil
+	return map[string]any{"score": score, "total": total, "xp": xp, "bonus": bonus, "speed": speed, "seconds": secs,
+		"correct": correct, "first": first, "badges": newBadges(u, before), "profile": s.profile(u)}, nil
+}
+
+// QuizStats: analitik untuk guru pemilik kelas.
+func (s *Store) QuizStats(uid, qid int) (map[string]any, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	q := s.quizzes[qid]
+	if q == nil {
+		return nil, ErrNotFound
+	}
+	c := s.classes[q.ClassID]
+	if c == nil || c.TeacherID != uid {
+		return nil, ErrForbidden
+	}
+	pct := func(a, b int) int {
+		if b == 0 {
+			return 0
+		}
+		return int(math.Round(100 * float64(a) / float64(b)))
+	}
+	qs := []map[string]any{}
+	for i, qu := range q.Questions {
+		ok := 0
+		if i < len(q.Correct) {
+			ok = q.Correct[i]
+		}
+		qs = append(qs, map[string]any{"text": qu.Text, "correct_pct": pct(ok, q.Takers)})
+	}
+	res := []map[string]any{}
+	for k, a := range s.attempts {
+		if k[1] == qid && s.users[k[0]] != nil {
+			res = append(res, map[string]any{"username": s.users[k[0]].Username, "score": a.Score, "total": a.Total})
+		}
+	}
+	sort.Slice(res, func(i, j int) bool {
+		if res[i]["score"].(int) != res[j]["score"].(int) {
+			return res[i]["score"].(int) > res[j]["score"].(int)
+		}
+		return res[i]["username"].(string) < res[j]["username"].(string)
+	})
+	return map[string]any{"title": q.Title, "takers": q.Takers, "members": len(c.Members),
+		"avg_pct": pct(q.ScoreSum, q.Takers*len(q.Questions)), "questions": qs, "results": res}, nil
 }
 
 // ---------- diskusi ----------
@@ -582,7 +685,7 @@ func (s *Store) Leaderboard() map[string]any {
 			break
 		}
 		students = append(students, map[string]any{"rank": i + 1, "id": u.ID, "username": u.Username, "xp": u.XP,
-			"level": u.XP/100 + 1, "streak": u.Streak, "badges": len(u.Badges)})
+			"level": u.XP/100 + 1, "title": levelTitle(u.XP/100 + 1), "streak": u.Streak, "badges": len(u.Badges)})
 	}
 	cs := []*Class{}
 	for _, c := range s.classes {

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,6 +16,7 @@ type App struct {
 	hasher   *Hasher
 	secret   []byte
 	juryCode string
+	dirty    chan struct{}
 }
 
 func respond(w http.ResponseWriter, code int, v any) {
@@ -324,4 +327,54 @@ func (a *App) audit(w http.ResponseWriter, r *http.Request, c *Claims) {
 		return
 	}
 	respond(w, 200, raw)
+}
+
+func (a *App) markDirty() {
+	select {
+	case a.dirty <- struct{}{}:
+	default:
+	}
+}
+
+func (a *App) startQuiz(w http.ResponseWriter, r *http.Request, c *Claims) {
+	limit, err := a.store.StartQuiz(c.Sub, pid(r))
+	if err != nil {
+		fx(w, err)
+		return
+	}
+	respond(w, 200, map[string]any{"limit": limit})
+}
+
+func (a *App) quizStats(w http.ResponseWriter, r *http.Request, c *Claims) {
+	st, err := a.store.QuizStats(c.Sub, pid(r))
+	if err != nil {
+		fx(w, err)
+		return
+	}
+	respond(w, 200, st)
+}
+
+// csvSafe mencegah injeksi rumus saat CSV dibuka di Excel/Sheets.
+func csvSafe(s string) string {
+	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
+		return "'" + s
+	}
+	return s
+}
+
+func (a *App) exportProjects(w http.ResponseWriter, r *http.Request, c *Claims) {
+	d := a.store.ListProjects(c.Sub, c.Role)
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="rekap-juri.csv"`)
+	cw := csv.NewWriter(w)
+	cw.Write([]string{"peringkat", "judul", "tim", "pembuat", "jumlah_juri", "skor_akhir", "inovasi", "dampak", "kolaborasi", "desain", "teknis"})
+	for _, p := range d["projects"].([]map[string]any) {
+		cr := p["criteria"].(map[string]float64)
+		row := []string{fmt.Sprint(p["rank"]), csvSafe(p["title"].(string)), csvSafe(p["team"].(string)), csvSafe(p["owner"].(string)), fmt.Sprint(p["votes"]), fmt.Sprint(p["score"])}
+		for _, k := range []string{"inovasi", "dampak", "kolaborasi", "desain", "teknis"} {
+			row = append(row, fmt.Sprint(cr[k]))
+		}
+		cw.Write(row)
+	}
+	cw.Flush()
 }

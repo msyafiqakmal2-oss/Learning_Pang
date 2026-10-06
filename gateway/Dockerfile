@@ -7,5 +7,6 @@ FROM alpine:3.20
 COPY --from=build /gateway /gateway
 COPY web /web
 ENV WEB_DIR=/web
+RUN mkdir -p /data
 EXPOSE 8080
 CMD ["/gateway"]

@@ -2,7 +2,7 @@
 
 | Modul | Berkas | Upgrade yang disarankan |
 |---|---|---|
-| Penyimpanan | `gateway/store.go`, `jury.go` | Ganti map in-memory dengan PostgreSQL/SQLite; pertahankan nama method. |
+| Penyimpanan | `gateway/persist.go` | Saat ini snapshot JSON. Untuk skala besar ganti dengan PostgreSQL/SQLite; pertahankan nama method Store. |
 | Gamifikasi | `store.go` (bagian "gamifikasi") | Tambah lencana, level kustom, hadiah, event musiman. |
 | Kuis | `store.go` | Tipe soal baru (isian, gambar), bank soal, batas waktu, kuis real-time (WebSocket). |
 | Juri | `jury.go` | Kriteria dan bobot per lomba, ekspor hasil PDF/CSV, anonimisasi tim. |
