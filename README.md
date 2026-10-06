@@ -1,4 +1,4 @@
-# EduNexus — Ekosistem Kolaborasi & Gamifikasi Pendidikan
+# EduNexus — Ekosistem Kolaborasi & Pendidikan
 
 Belajar jadi petualangan: kuis, misi harian, XP, level, streak, lencana, kelas kolaboratif,
 dan modul **penilaian juri** untuk memilih karya terbaik.
