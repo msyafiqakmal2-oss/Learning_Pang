@@ -92,3 +92,20 @@ func (h *Hasher) AuditList() (json.RawMessage, error) {
 	err = json.NewDecoder(res.Body).Decode(&raw)
 	return raw, err
 }
+
+// Ping memeriksa layanan Rust: "ok", "down", atau "off" (mode dev tanpa Rust).
+func (h *Hasher) Ping() string {
+	if h.url == "" {
+		return "off"
+	}
+	c := &http.Client{Timeout: 2 * time.Second}
+	res, err := c.Get(h.url + "/healthz")
+	if err != nil {
+		return "down"
+	}
+	res.Body.Close()
+	if res.StatusCode != 200 {
+		return "down"
+	}
+	return "ok"
+}

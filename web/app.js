@@ -188,9 +188,7 @@ async function home() {
       m.role === "siswa" && h("div", { class: "stat" }, h("div", { class: "num" }, `🔥 ${m.streak}`), h("span", {}, "hari berturut-turut")),
     ));
   } else {
-    wrap.append(h("div", { class: "card" }, h("h2", {}, "⚖️ Selamat datang, Juri!"),
-      h("ol", {}, h("li", {}, "Buka menu ", h("b", {}, "Penilaian"), " lalu pilih karya."), h("li", {}, "Nilai 5 kriteria (1-10), tulis komentar singkat."), h("li", {}, "Peringkat dan Calon Juara 1 diperbarui otomatis.")),
-      h("button", { class: "btn primary", onclick: () => go("karya") }, "Mulai menilai →")));
+    wrap.append(tourCard());
   }
   if (m.role === "siswa") {
     wrap.append(h("div", { class: "card" }, h("h2", {}, "🎯 Misi Harian"),
@@ -206,6 +204,82 @@ async function home() {
     h("div", { class: "stats" }, mk(st.students, "siswa aktif"), mk(st.classes, "kelas"), mk(st.attempts, "kuis dikerjakan"),
       mk(st.posts, "diskusi"), mk(st.projects, "karya proyek"), mk(st.votes, "penilaian juri"), mk(st.xp, "total XP terkumpul"))));
   return wrap;
+}
+
+// ---------- tur & diagnostik untuk juri ----------
+const TOUR = [
+  ["home", "Lihat angka dampak platform di bagian bawah Beranda"],
+  ["peringkat", "Buka Peringkat: papan siswa dan Tantangan Kelas"],
+  ["karya", "Buka Penilaian: beri nilai satu karya, lihat Podium berubah"],
+  ["karya", "Klik 🎓 Sertifikat pada podium dan ⬇️ Unduh rekap CSV"],
+  ["panduan", "Buka Panduan Juri: peta fitur ke kriteria + log audit"],
+  ["panduan", "Jalankan 🩺 Cek sistem untuk menguji kecepatan dan layanan"],
+];
+
+function tourCard() {
+  const key = "tour_" + S.me.id;
+  let done = [];
+  try { done = JSON.parse(localStorage.getItem(key) || "[]"); } catch { done = []; }
+  const count = h("span", { class: "tag sun" });
+  const fill = h("i");
+  const refresh = () => {
+    count.textContent = `${done.length}/${TOUR.length} selesai`;
+    fill.style.width = (done.length / TOUR.length) * 100 + "%";
+  };
+  const rows = TOUR.map(([tab, text], i) => {
+    const cb = h("input", { type: "checkbox", checked: done.includes(i), id: "tour" + i, style: "width:auto;margin:0" });
+    cb.onchange = () => {
+      done = cb.checked ? [...new Set([...done, i])] : done.filter((x) => x !== i);
+      try { localStorage.setItem(key, JSON.stringify(done)); } catch {}
+      refresh();
+    };
+    return h("div", { class: "quest" }, cb, h("label", { for: "tour" + i, style: "margin:0;font-weight:600" }, text),
+      h("button", { class: "btn sm", onclick: () => go(tab) }, "Buka →"));
+  });
+  refresh();
+  return h("div", { class: "card" },
+    h("div", { class: "row sb" }, h("h2", { style: "margin:0" }, "🧭 Tur juri 5 menit"), count),
+    h("p", { class: "muted", style: "margin:6px 0 10px" }, "Ikuti urutan ini untuk menilai seluruh fitur. Centang saat selesai; progresmu tersimpan di perangkat ini."),
+    h("div", { class: "progress" }, fill), rows);
+}
+
+function diagCard() {
+  const out = h("div", { class: "log" }, h("div", {}, "Klik tombol untuk menjalankan pemeriksaan."));
+  const nav0 = performance.getEntriesByType?.("navigation")?.[0];
+  const load = nav0 ? Math.round(nav0.loadEventEnd || nav0.domContentLoadedEventEnd) : null;
+  const res = performance.getEntriesByType?.("resource") || [];
+  const kb = Math.round(res.reduce((t, r) => t + (r.transferSize || 0), 0) / 1024);
+  const check = async () => {
+    put(out, h("div", {}, "Memeriksa…"));
+    const rows = [];
+    let t = performance.now();
+    try {
+      const r = await fetch("/healthz", { cache: "no-store" });
+      const d = await r.json();
+      rows.push(`✅ Layanan Go (gateway): sehat · ${Math.round(performance.now() - t)} ms`);
+      rows.push(d.hasher === "ok" ? "✅ Layanan Rust (Argon2 + audit): aktif"
+        : d.hasher === "off" ? "ℹ️ Layanan Rust tidak dipakai (mode pengembangan)" : "❌ Layanan Rust tidak terjangkau");
+    } catch { rows.push("❌ Layanan Go tidak merespons"); }
+    t = performance.now();
+    try { await api("/me"); rows.push(`✅ API dan sesi login: normal · ${Math.round(performance.now() - t)} ms`); }
+    catch (e) { rows.push("❌ API: " + e.message); }
+    rows.push(`ℹ️ Halaman ini dimuat dalam ${load ?? "-"} ms · unduhan ±${kb} KB (${res.length} berkas)`);
+    put(out, rows.map((r) => h("div", {}, r)));
+  };
+  return h("div", { class: "card" }, h("h2", {}, "🩺 Cek sistem & kecepatan buka"),
+    h("p", { class: "muted", style: "margin-top:0" }, "Untuk menilai proses pembukaan website secara objektif."),
+    out, h("button", { class: "btn sm", style: "margin-top:10px", onclick: run(check) }, "Jalankan pemeriksaan"));
+}
+
+function linkCard() {
+  const mk = (role, label) => {
+    const url = `${location.origin}/?demo=${role}`;
+    return h("div", { class: "quiz", style: "padding:8px 0" }, h("div", {}, h("b", {}, label), h("div", { class: "muted", style: "font-size:.85rem;word-break:break-all" }, url)),
+      h("button", { class: "btn sm", onclick: run(async () => { await navigator.clipboard.writeText(url); toast("Tautan disalin 📋"); }) }, "Salin"));
+  };
+  return h("div", { class: "card" }, h("h2", {}, "🔗 Tautan masuk satu klik"),
+    h("p", { class: "muted", style: "margin-top:0" }, "Buka tautan ini dan langsung masuk memakai akun demo, tanpa mengetik apa pun."),
+    mk("juri", "⚖️ Juri"), mk("siswa", "🎒 Siswa"), mk("guru", "🧑‍🏫 Guru"));
 }
 
 // ---------- kelas ----------
@@ -544,6 +618,7 @@ async function panduan() {
     ["Kualitas Teknis (15%)", "Go (API, JWT, RBAC 3 peran), Rust (Argon2id + audit log), data permanen, ekspor CSV aman, Docker Compose, validasi server, XSS-safe."],
   ];
   wrap.append(h("div", { class: "card" }, h("h2", {}, "🗺️ Peta fitur → kriteria juri"), h("div", { class: "grid" }, map.map(([t, d]) => h("div", { class: "stat", style: "text-align:left" }, h("b", {}, t), h("p", { class: "muted", style: "margin:6px 0 0;font-size:.88rem" }, d))))));
+  wrap.append(linkCard(), diagCard());
   if (m.role === "guru" || m.role === "juri") {
     const box = h("div", { class: "log" }, "Memuat…");
     wrap.append(h("div", { class: "card" }, h("h2", {}, "🔍 Log audit transparan ", h("small", { class: "muted", style: "font-weight:400;font-size:.8rem" }, "(dari layanan Rust)")), box));
@@ -555,4 +630,11 @@ async function panduan() {
 
 const VIEWS = { home, kelas, peringkat, karya, panduan };
 setMode("login");
-if (localStorage.getItem("token")) start(false);
+const DEMO_USER = { siswa: "rina", guru: "bu_sari", juri: "juri1" };
+const demoRole = new URLSearchParams(location.search).get("demo");
+if (DEMO_USER[demoRole]) {
+  localStorage.removeItem("token");
+  doAuth("login", DEMO_USER[demoRole], "demo12345")
+    .then(() => history.replaceState(null, "", location.pathname))
+    .catch((err) => { $("auth-msg").textContent = "Akun demo belum siap, tunggu beberapa detik lalu muat ulang. (" + err.message + ")"; });
+} else if (localStorage.getItem("token")) start(false);

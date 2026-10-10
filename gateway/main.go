@@ -93,9 +93,7 @@ func main() {
 	mux.HandleFunc("POST /api/projects/{id}/score", a.auth(juri(a.scoreProject)))
 	mux.HandleFunc("GET /api/audit", a.auth(guruJuri(a.audit)))
 
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		respond(w, 200, map[string]string{"status": "ok"})
-	})
+	mux.HandleFunc("GET /healthz", a.health)
 	static := http.FileServer(http.Dir(getenv("WEB_DIR", "../web")))
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache") // selalu cek versi terbaru

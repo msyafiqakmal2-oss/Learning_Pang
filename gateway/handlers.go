@@ -378,3 +378,7 @@ func (a *App) exportProjects(w http.ResponseWriter, r *http.Request, c *Claims) 
 	}
 	cw.Flush()
 }
+
+func (a *App) health(w http.ResponseWriter, r *http.Request) {
+	respond(w, 200, map[string]string{"status": "ok", "hasher": a.hasher.Ping()})
+}

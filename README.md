@@ -43,3 +43,6 @@ Inovasi 25% · Dampak Pendidikan 25% · Kolaborasi 20% · Desain & UX 15% · Kua
 ## Catatan
 - Data disimpan permanen di `edunexus.json` (Docker: volume `edudata`). Hapus berkas/volume untuk mengulang dari awal. Set `DATA_FILE=off` untuk mematikan.
 - Ganti `JWT_SECRET` dan `JURY_CODE` sebelum dipakai sungguhan.
+
+## Lomba & hosting
+Lihat `docs/DEPLOY.md` untuk cara menaruh online, tautan satu klik untuk juri (`/?demo=juri`), dan checklist pengumpulan.

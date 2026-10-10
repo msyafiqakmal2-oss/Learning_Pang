@@ -1,0 +1,24 @@
+# Satu image berisi Go (gateway) + Rust (hasher) -> mudah di-deploy ke layanan hosting
+# yang hanya menerima SATU container. Build: docker build -f Dockerfile.single -t edunexus .
+FROM rust:1.85 AS rust
+WORKDIR /src
+COPY hasher/ .
+RUN cargo build --release
+
+FROM golang:1.22-alpine AS go
+WORKDIR /src
+COPY gateway/ .
+RUN CGO_ENABLED=0 go build -o /gateway .
+
+FROM debian:bookworm-slim
+COPY --from=rust /src/target/release/hasher /hasher
+COPY --from=go /gateway /gateway
+COPY web /web
+COPY start.sh /start.sh
+RUN chmod +x /start.sh && mkdir -p /data
+ENV WEB_DIR=/web \
+    HASHER_URL=http://127.0.0.1:8081 \
+    ADDR=127.0.0.1:8081 \
+    DATA_FILE=/data/edunexus.json
+EXPOSE 8080
+CMD ["/start.sh"]
